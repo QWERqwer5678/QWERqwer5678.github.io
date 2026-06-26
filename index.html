@@ -1532,6 +1532,15 @@ html, body {
           </p>
         </div>
       </div>
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; padding-top: 15px; border-top: 1px solid var(--glass-border);">
+        <button id="export-config-btn" class="btn btn-ghost" style="flex: 1; font-size: 13px; padding: 10px 15px;">
+          📤 导出配置
+        </button>
+        <button id="import-config-btn" class="btn btn-ghost" style="flex: 1; font-size: 13px; padding: 10px 15px;">
+          📥 导入配置
+        </button>
+        <input type="file" id="import-config-input" accept=".json" style="display: none;" />
+      </div>
       <div class="edit-buttons">
         <button id="edit-reset" class="btn btn-ghost">恢复默认</button>
         <button id="edit-save" class="btn btn-primary">保存修改</button>
@@ -1944,6 +1953,9 @@ function initElements() {
   elements.videoPlayer = document.getElementById('video-player');
   elements.videoTitle = document.getElementById('video-title');
   elements.videoPlaceholder = document.getElementById('video-placeholder');
+  elements.exportConfigBtn = document.getElementById('export-config-btn');
+  elements.importConfigBtn = document.getElementById('import-config-btn');
+  elements.importConfigInput = document.getElementById('import-config-input');
 }
 
 function createParticles() {
@@ -2721,6 +2733,97 @@ function openVideoModal(charId) {
   }
 }
 
+function exportConfig() {
+  const config = {
+    version: '1.0',
+    exportTime: new Date().toISOString(),
+    titleBg: localStorage.getItem('teamIntroBg') || null,
+    charInfo: JSON.parse(localStorage.getItem('teamIntroCharInfo') || '{}'),
+    charPhotos: JSON.parse(localStorage.getItem('teamIntroPhotos') || '{}'),
+    charBg: JSON.parse(localStorage.getItem('teamIntroCharBg') || '{}')
+  };
+  
+  const dataStr = JSON.stringify(config, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `认识一下-配置_${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  alert('配置导出成功！\n把这个 JSON 文件发给朋友，他们导入就能看到一样的内容啦～');
+}
+
+function importConfig(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (!file.name.endsWith('.json')) {
+    alert('请选择 .json 格式的配置文件！');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    try {
+      const config = JSON.parse(event.target.result);
+      
+      if (!config.version) {
+        alert('这不是有效的配置文件！');
+        return;
+      }
+      
+      if (config.titleBg) {
+        localStorage.setItem('teamIntroBg', config.titleBg);
+        setBackgroundImage(config.titleBg);
+      }
+      
+      if (config.charInfo && Object.keys(config.charInfo).length > 0) {
+        localStorage.setItem('teamIntroCharInfo', JSON.stringify(config.charInfo));
+        Object.keys(config.charInfo).forEach(charId => {
+          if (characters[charId]) {
+            Object.assign(characters[charId], config.charInfo[charId]);
+          }
+        });
+      }
+      
+      if (config.charPhotos && Object.keys(config.charPhotos).length > 0) {
+        localStorage.setItem('teamIntroPhotos', JSON.stringify(config.charPhotos));
+        Object.keys(config.charPhotos).forEach(charId => {
+          if (characters[charId] && config.charPhotos[charId]) {
+            characters[charId].avatar = config.charPhotos[charId];
+          }
+        });
+      }
+      
+      if (config.charBg && Object.keys(config.charBg).length > 0) {
+        localStorage.setItem('teamIntroCharBg', JSON.stringify(config.charBg));
+        Object.keys(config.charBg).forEach(charId => {
+          if (charBgImages.hasOwnProperty(charId)) {
+            charBgImages[charId] = config.charBg[charId] || [];
+          }
+        });
+      }
+      
+      refreshCharacterCards();
+      switchEditTab(currentEditChar);
+      
+      alert('🎉 配置导入成功！\n所有成员信息、头像、背景图都已更新～');
+      
+    } catch(err) {
+      console.error(err);
+      alert('导入失败！文件格式不正确，请确认是导出的配置文件。');
+    }
+  };
+  reader.readAsText(file);
+  
+  e.target.value = '';
+}
+
 function updateAvatarPreview(charId, avatarUrl) {
   if (elements.editAvatarPreview) {
     if (avatarUrl && (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:'))) {
@@ -2992,6 +3095,14 @@ function initEvents() {
       elements.editModal.classList.add('hidden');
     }
   });
+  
+  elements.exportConfigBtn.addEventListener('click', exportConfig);
+  
+  elements.importConfigBtn.addEventListener('click', () => {
+    elements.importConfigInput.click();
+  });
+  
+  elements.importConfigInput.addEventListener('change', importConfig);
 }
 
 function handlePhotoUpload(e) {
